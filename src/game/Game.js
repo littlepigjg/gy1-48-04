@@ -56,6 +56,11 @@ export class Game {
     this.dailyChallengeTime = 0;
     this.dailyChallengeCompleted = false;
 
+    if (isDailyChallenge) {
+      dailyChallenge.refreshRewardsClaimed();
+      dailyChallenge.getChallenge();
+    }
+
     const seed = isDailyChallenge ? dailyChallenge.getSeed() : Date.now();
     this.world = new World(seed);
 
@@ -629,6 +634,7 @@ export class Game {
   }
 
   restartDailyChallenge() {
+    dailyChallenge.refreshRewardsClaimed();
     this.init(true);
     this.ui.hideDailyChallengeResult();
     this.start();
@@ -636,6 +642,7 @@ export class Game {
 
   exitDailyChallenge() {
     this.isDailyChallengeMode = false;
+    dailyChallenge.refreshRewardsClaimed();
     this.ui.hideDailyChallengeResult();
     this.ui.showStartScreen();
   }

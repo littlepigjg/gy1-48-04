@@ -252,6 +252,64 @@ describe('DailyChallenge - 奖励领取防重复测试', () => {
       expect(refreshed.badge).toBe(true);
       expect(dailyChallenge.rewardsClaimed.gold).toBe(true);
     });
+
+    it('外部修改存储后，refreshRewardsClaimed应该能正确同步', () => {
+      dailyChallenge = new DailyChallenge();
+      
+      expect(dailyChallenge.isGoldRewardedToday()).toBe(false);
+      expect(dailyChallenge.isBadgeRewardedToday()).toBe(false);
+      
+      SafeStorage.set(STORAGE_KEYS.DAILY_REWARDS_CLAIMED, {
+        [testDateKey]: { gold: true, badge: true }
+      });
+      
+      dailyChallenge.refreshRewardsClaimed();
+      
+      expect(dailyChallenge.isGoldRewardedToday()).toBe(true);
+      expect(dailyChallenge.isBadgeRewardedToday()).toBe(true);
+    });
+
+    it('模拟重试场景 - 完成领取后刷新，状态保持正确', () => {
+      dailyChallenge = new DailyChallenge();
+      dailyChallenge.currentChallenge = {
+        dateKey: testDateKey,
+        type: DAILY_CHALLENGE_TYPES.DEPTH,
+        target: 50,
+        timeLimit: 300,
+        rewards: { gold: 1000 }
+      };
+
+      const stats = { maxDepth: 100, enemiesKilled: 10, blocksDug: 100, cargo: {}, gold: 0 };
+      
+      const result1 = dailyChallenge.submitScore('TestPlayer', stats, 150);
+      expect(result1.rewards.gold).toBe(1000);
+      expect(result1.rewards.goldAlreadyClaimed).toBe(false);
+      expect(dailyChallenge.isGoldRewardedToday()).toBe(true);
+
+      dailyChallenge.refreshRewardsClaimed();
+      expect(dailyChallenge.isGoldRewardedToday()).toBe(true);
+      expect(dailyChallenge.isBadgeRewardedToday()).toBe(true);
+
+      const result2 = dailyChallenge.submitScore('TestPlayer', stats, 140);
+      expect(result2.rewards.gold).toBe(0);
+      expect(result2.rewards.goldAlreadyClaimed).toBe(true);
+    });
+
+    it('模拟重试场景 - 另一个实例修改后，刷新能同步状态', () => {
+      const instance1 = new DailyChallenge();
+      const instance2 = new DailyChallenge();
+      
+      expect(instance1.isGoldRewardedToday()).toBe(false);
+      expect(instance2.isGoldRewardedToday()).toBe(false);
+      
+      instance1.markGoldRewarded();
+      expect(instance1.isGoldRewardedToday()).toBe(true);
+      
+      expect(instance2.rewardsClaimed.gold).toBe(false);
+      instance2.refreshRewardsClaimed();
+      expect(instance2.rewardsClaimed.gold).toBe(true);
+      expect(instance2.isGoldRewardedToday()).toBe(true);
+    });
   });
 });
 
