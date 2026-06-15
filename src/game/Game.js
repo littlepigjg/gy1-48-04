@@ -8,7 +8,7 @@ import { ParticleSystem } from './particles.js';
 import { HazardManager } from './hazards.js';
 import { TeleportSystem } from './teleport.js';
 import { dailyChallenge, DAILY_CHALLENGE_TYPES, DAILY_CHALLENGE_BADGES, getBadgeByProgress } from './dailyChallenge.js';
-import { STANDARD_PLAYER_CONFIG } from './challengeConfig.js';
+import { initializeDailyChallengePlayer, validateDailyChallengePlayer, extractDailyChallengeStats } from './challengeInitializer.js';
 
 export class Game {
   constructor(canvas) {
@@ -91,38 +91,14 @@ export class Game {
   }
 
   setupDailyChallengePlayer() {
-    const std = STANDARD_PLAYER_CONFIG;
+    initializeDailyChallengePlayer(this.player);
     
-    this.player.upgrades = { ...std.upgrades };
-    this.player.applyUpgrades();
-    
-    const baseStats = std.baseStats;
-    this.player.maxFuel = baseStats.maxFuel;
-    this.player.maxOxygen = baseStats.maxOxygen;
-    this.player.maxHeat = baseStats.maxHeat;
-    this.player.maxCargo = baseStats.maxCargo;
-    this.player.maxHealth = baseStats.maxHealth;
-    this.player.speed = baseStats.speed;
-    this.player.drillPower = baseStats.drillPower;
-    this.player.heatGeneration = baseStats.heatGeneration;
-    this.player.coolingRate = baseStats.coolingRate;
-    this.player.fuelConsumption = baseStats.fuelConsumption;
-    this.player.oxygenConsumption = baseStats.oxygenConsumption;
-    this.player.damageReduction = baseStats.damageReduction;
-    this.player.weaponDamage = baseStats.weaponDamage;
-    this.player.weaponCooldown = baseStats.weaponCooldown;
-    
-    const resources = std.startingResources;
-    this.player.gold = resources.gold;
-    this.player.cargo = { ...resources.cargo };
-    this.player.cargoUsed = resources.cargoUsed;
-    this.player.maxDepth = resources.maxDepth;
-    this.player.fuel = resources.fuel;
-    this.player.oxygen = resources.oxygen;
-    this.player.heat = resources.heat;
-    this.player.health = resources.health;
-    this.player.damageFlash = 0;
-    this.player.lastShot = 0;
+    if (window.DEBUG) {
+      const validation = validateDailyChallengePlayer(this.player);
+      if (!validation.isValid) {
+        console.warn('Daily challenge player validation failed:', validation.errors);
+      }
+    }
   }
 
   setupInput() {
@@ -341,13 +317,7 @@ export class Game {
   }
 
   getDailyStats() {
-    return {
-      maxDepth: this.player.maxDepth,
-      enemiesKilled: this.stats.enemiesKilled,
-      blocksDug: this.stats.blocksDug,
-      cargo: { ...this.player.cargo },
-      gold: this.player.gold
-    };
+    return extractDailyChallengeStats(this.player, this.stats);
   }
 
   endDailyChallenge(completed) {

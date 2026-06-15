@@ -35,6 +35,11 @@ export class DailyChallenge {
     return data[this.dateKey] || { gold: false, badge: false };
   }
 
+  refreshRewardsClaimed() {
+    this.rewardsClaimed = this.loadRewardsClaimed();
+    return this.rewardsClaimed;
+  }
+
   saveRewardsClaimed() {
     const data = SafeStorage.get(STORAGE_KEYS.DAILY_REWARDS_CLAIMED, {});
     data[this.dateKey] = this.rewardsClaimed;
@@ -42,21 +47,33 @@ export class DailyChallenge {
   }
 
   isGoldRewardedToday() {
+    this.refreshRewardsClaimed();
     return this.rewardsClaimed.gold === true;
   }
 
   isBadgeRewardedToday() {
+    this.refreshRewardsClaimed();
     return this.rewardsClaimed.badge === true;
   }
 
   markGoldRewarded() {
+    this.refreshRewardsClaimed();
+    if (this.rewardsClaimed.gold) {
+      return false;
+    }
     this.rewardsClaimed.gold = true;
     this.saveRewardsClaimed();
+    return true;
   }
 
   markBadgeRewarded() {
+    this.refreshRewardsClaimed();
+    if (this.rewardsClaimed.badge) {
+      return false;
+    }
     this.rewardsClaimed.badge = true;
     this.saveRewardsClaimed();
+    return true;
   }
 
   load() {
@@ -211,13 +228,12 @@ export class DailyChallenge {
       const rank = allData[this.dateKey].findIndex(e => e.timestamp === entry.timestamp) + 1;
 
       if (completion.completed) {
-        const goldAlreadyClaimed = this.isGoldRewardedToday();
         const badgeAlreadyClaimed = this.isBadgeRewardedToday();
 
-        if (!goldAlreadyClaimed) {
+        const goldClaimed = this.markGoldRewarded();
+        if (goldClaimed) {
           const goldAmount = this.currentChallenge.rewards.gold;
           this.awardGold(goldAmount);
-          this.markGoldRewarded();
           rewardsResult.gold = goldAmount;
         } else {
           rewardsResult.goldAlreadyClaimed = true;
@@ -225,7 +241,7 @@ export class DailyChallenge {
 
         const badge = this.awardBadge(completion.progress, stats, badgeAlreadyClaimed);
         rewardsResult.badge = badge;
-        if (badgeAlreadyClaimed) {
+        if (badgeAlreadyClaimed && !badge) {
           rewardsResult.badgeAlreadyClaimed = true;
         }
       }
