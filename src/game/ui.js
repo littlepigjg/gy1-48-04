@@ -396,21 +396,44 @@ export class UIManager {
     }
 
     const badgeEl = document.getElementById('dailyResultBadge');
+    const rewards = result.rewards || {};
+    
     if (result.badge && result.completed) {
       badgeEl.classList.remove('hidden');
       document.getElementById('dailyBadgeIcon').textContent = this.getBadgeIcon(result.badge.key);
-      document.getElementById('dailyBadgeName').textContent = `${result.badge.name}徽章`;
+      
+      if (rewards.badgeAlreadyClaimed && result.completed) {
+        document.getElementById('dailyBadgeName').textContent = `${result.badge.name}徽章 (已领取)`;
+      } else {
+        document.getElementById('dailyBadgeName').textContent = `${result.badge.name}徽章`;
+      }
       document.getElementById('dailyBadgeName').style.color = result.badge.color;
     } else {
       badgeEl.classList.add('hidden');
     }
 
     const rewardsEl = document.getElementById('dailyRewards');
-    if (result.rewards.gold > 0) {
-      rewardsEl.innerHTML = `💰 金币 +${result.rewards.gold}`;
+    const rewardsParts = [];
+    
+    if (result.completed) {
+      if (rewards.gold > 0) {
+        rewardsParts.push(`💰 金币 +${rewards.gold}`);
+      } else if (rewards.goldAlreadyClaimed) {
+        rewardsParts.push(`💰 金币 (今日已领取)`);
+      }
+      
+      if (rewards.badgeAlreadyClaimed && result.badge) {
+        rewardsParts.push(`🎖️ 徽章 (今日已领取，挑战成绩更佳可升级)`);
+      }
+      
+      if (rewardsParts.length === 0) {
+        rewardsParts.push('今日奖励已全部领取完毕！');
+      }
     } else {
-      rewardsEl.innerHTML = '完成挑战以获得奖励';
+      rewardsParts.push('完成挑战以获得奖励');
     }
+    
+    rewardsEl.innerHTML = rewardsParts.join('<br>');
 
     screen.classList.remove('hidden');
     screen.classList.add('flex');

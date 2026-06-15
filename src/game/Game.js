@@ -7,7 +7,8 @@ import { UIManager } from './ui.js';
 import { ParticleSystem } from './particles.js';
 import { HazardManager } from './hazards.js';
 import { TeleportSystem } from './teleport.js';
-import { dailyChallenge, DAILY_CHALLENGE_TYPES } from './dailyChallenge.js';
+import { dailyChallenge, DAILY_CHALLENGE_TYPES, DAILY_CHALLENGE_BADGES, getBadgeByProgress } from './dailyChallenge.js';
+import { STANDARD_PLAYER_CONFIG } from './challengeConfig.js';
 
 export class Game {
   constructor(canvas) {
@@ -90,28 +91,38 @@ export class Game {
   }
 
   setupDailyChallengePlayer() {
-    this.player.upgrades = {
-      engine: 0,
-      drill: 0,
-      cargo: 0,
-      fuel_tank: 0,
-      oxygen_tank: 0,
-      cooling: 0,
-      armor: 0,
-      weapon: 0
-    };
+    const std = STANDARD_PLAYER_CONFIG;
+    
+    this.player.upgrades = { ...std.upgrades };
     this.player.applyUpgrades();
-    this.player.gold = 0;
-    this.player.cargo = {
-      coal: 0,
-      iron: 0,
-      gold: 0,
-      emerald: 0,
-      ruby: 0,
-      diamond: 0
-    };
-    this.player.cargoUsed = 0;
-    this.player.maxDepth = 0;
+    
+    const baseStats = std.baseStats;
+    this.player.maxFuel = baseStats.maxFuel;
+    this.player.maxOxygen = baseStats.maxOxygen;
+    this.player.maxHeat = baseStats.maxHeat;
+    this.player.maxCargo = baseStats.maxCargo;
+    this.player.maxHealth = baseStats.maxHealth;
+    this.player.speed = baseStats.speed;
+    this.player.drillPower = baseStats.drillPower;
+    this.player.heatGeneration = baseStats.heatGeneration;
+    this.player.coolingRate = baseStats.coolingRate;
+    this.player.fuelConsumption = baseStats.fuelConsumption;
+    this.player.oxygenConsumption = baseStats.oxygenConsumption;
+    this.player.damageReduction = baseStats.damageReduction;
+    this.player.weaponDamage = baseStats.weaponDamage;
+    this.player.weaponCooldown = baseStats.weaponCooldown;
+    
+    const resources = std.startingResources;
+    this.player.gold = resources.gold;
+    this.player.cargo = { ...resources.cargo };
+    this.player.cargoUsed = resources.cargoUsed;
+    this.player.maxDepth = resources.maxDepth;
+    this.player.fuel = resources.fuel;
+    this.player.oxygen = resources.oxygen;
+    this.player.heat = resources.heat;
+    this.player.health = resources.health;
+    this.player.damageFlash = 0;
+    this.player.lastShot = 0;
   }
 
   setupInput() {
@@ -350,6 +361,8 @@ export class Game {
     const playerName = dailyChallenge.getPlayerName();
     const submitResult = dailyChallenge.submitScore(playerName, stats, timeTaken);
 
+    const rewardsInfo = submitResult.rewards || { gold: 0, badge: null, goldAlreadyClaimed: false, badgeAlreadyClaimed: false };
+
     this.ui.hideHUD();
     this.ui.hideDailyChallengeInfo();
     this.ui.showDailyChallengeResult({
@@ -359,18 +372,17 @@ export class Game {
       score: submitResult.entry.score,
       rank: submitResult.rank,
       totalPlayers: submitResult.totalPlayers,
-      rewards: completed ? dailyChallenge.getChallenge().rewards : { gold: 0 },
-      badge: this.getBadgeForProgress(result.progress)
+      rewards: {
+        gold: rewardsInfo.gold,
+        goldAlreadyClaimed: rewardsInfo.goldAlreadyClaimed,
+        badgeAlreadyClaimed: rewardsInfo.badgeAlreadyClaimed
+      },
+      badge: rewardsInfo.badge || null
     });
   }
 
   getBadgeForProgress(progress) {
-    for (const [key, def] of Object.entries(DAILY_CHALLENGE_BADGES)) {
-      if (progress >= def.threshold) {
-        return { key, ...def };
-      }
-    }
-    return null;
+    return getBadgeByProgress(progress);
   }
 
   handleDigging(dt) {
