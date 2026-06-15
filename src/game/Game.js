@@ -7,6 +7,7 @@ import { UIManager } from './ui.js';
 import { ParticleSystem } from './particles.js';
 import { HazardManager } from './hazards.js';
 import { TeleportSystem } from './teleport.js';
+import { dailyChallenge, DAILY_CHALLENGE_TYPES } from './dailyChallenge.js';
 
 export class Game {
   constructor(canvas) {
@@ -41,12 +42,20 @@ export class Game {
 
     this.baseBuildingX = Math.floor(WORLD_WIDTH / 2) - 3;
 
+    this.isDailyChallengeMode = false;
+    this.dailyChallengeTime = 0;
+    this.dailyChallengeCompleted = false;
+
     this.setupInput();
     this.init();
   }
 
-  init() {
-    const seed = Date.now();
+  init(isDailyChallenge = false) {
+    this.isDailyChallengeMode = isDailyChallenge;
+    this.dailyChallengeTime = 0;
+    this.dailyChallengeCompleted = false;
+
+    const seed = isDailyChallenge ? dailyChallenge.getSeed() : Date.now();
     this.world = new World(seed);
 
     const startX = Math.floor(WORLD_WIDTH / 2);
@@ -66,6 +75,11 @@ export class Game {
     }
 
     this.player = new Player(startX, startY);
+    
+    if (isDailyChallenge) {
+      this.setupDailyChallengePlayer();
+    }
+
     this.enemies = new EnemyManager();
     this.bullets = [];
     this.particles.clear();
@@ -73,6 +87,31 @@ export class Game {
     this.teleport = new TeleportSystem();
     this.stats = { blocksDug: 0, enemiesKilled: 0 };
     this.collapseTimer = 0;
+  }
+
+  setupDailyChallengePlayer() {
+    this.player.upgrades = {
+      engine: 0,
+      drill: 0,
+      cargo: 0,
+      fuel_tank: 0,
+      oxygen_tank: 0,
+      cooling: 0,
+      armor: 0,
+      weapon: 0
+    };
+    this.player.applyUpgrades();
+    this.player.gold = 0;
+    this.player.cargo = {
+      coal: 0,
+      iron: 0,
+      gold: 0,
+      emerald: 0,
+      ruby: 0,
+      diamond: 0
+    };
+    this.player.cargoUsed = 0;
+    this.player.maxDepth = 0;
   }
 
   setupInput() {
@@ -190,7 +229,15 @@ export class Game {
     this.lastTime = performance.now();
     this.ui.showHUD();
     this.ui.hideGameOver();
+    if (this.isDailyChallengeMode) {
+      this.ui.showDailyChallengeInfo();
+    }
     this.loop();
+  }
+
+  startDailyChallenge() {
+    this.init(true);
+    this.start();
   }
 
   loop() {
@@ -254,6 +301,76 @@ export class Game {
     this.checkCollapses(dt);
     this.checkEnemyKills();
     this.checkLowResources();
+
+    if (this.isDailyChallengeMode) {
+      this.updateDailyChallenge(dt);
+    }
+  }
+
+  updateDailyChallenge(dt) {
+    this.dailyChallengeTime += dt;
+
+    const challenge = dailyChallenge.getChallenge();
+    const stats = this.getDailyStats();
+    const result = dailyChallenge.checkCompletion(stats);
+
+    if (result.completed && !this.dailyChallengeCompleted) {
+      this.dailyChallengeCompleted = true;
+      this.ui.showWarning('🎉 挑战完成！', 2000, 'text-green-300');
+      setTimeout(() => this.endDailyChallenge(true), 1500);
+      return;
+    }
+
+    if (this.dailyChallengeTime >= challenge.timeLimit) {
+      this.endDailyChallenge(false);
+      return;
+    }
+
+    this.ui.updateDailyChallengeHUD(this.dailyChallengeTime, result.progress);
+  }
+
+  getDailyStats() {
+    return {
+      maxDepth: this.player.maxDepth,
+      enemiesKilled: this.stats.enemiesKilled,
+      blocksDug: this.stats.blocksDug,
+      cargo: { ...this.player.cargo },
+      gold: this.player.gold
+    };
+  }
+
+  endDailyChallenge(completed) {
+    if (!this.running) return;
+    this.running = false;
+
+    const stats = this.getDailyStats();
+    const timeTaken = this.dailyChallengeTime;
+    const result = dailyChallenge.checkCompletion(stats);
+
+    const playerName = dailyChallenge.getPlayerName();
+    const submitResult = dailyChallenge.submitScore(playerName, stats, timeTaken);
+
+    this.ui.hideHUD();
+    this.ui.hideDailyChallengeInfo();
+    this.ui.showDailyChallengeResult({
+      completed: result.completed,
+      progress: result.progress,
+      timeTaken,
+      score: submitResult.entry.score,
+      rank: submitResult.rank,
+      totalPlayers: submitResult.totalPlayers,
+      rewards: completed ? dailyChallenge.getChallenge().rewards : { gold: 0 },
+      badge: this.getBadgeForProgress(result.progress)
+    });
+  }
+
+  getBadgeForProgress(progress) {
+    for (const [key, def] of Object.entries(DAILY_CHALLENGE_BADGES)) {
+      if (progress >= def.threshold) {
+        return { key, ...def };
+      }
+    }
+    return null;
   }
 
   handleDigging(dt) {
@@ -508,6 +625,12 @@ export class Game {
 
   gameOver() {
     this.running = false;
+    
+    if (this.isDailyChallengeMode) {
+      this.endDailyChallenge(false);
+      return;
+    }
+
     this.ui.hideHUD();
     this.ui.showGameOver({
       gold: this.player.gold,
@@ -521,5 +644,17 @@ export class Game {
     this.init();
     this.ui.hideGameOver();
     this.start();
+  }
+
+  restartDailyChallenge() {
+    this.init(true);
+    this.ui.hideDailyChallengeResult();
+    this.start();
+  }
+
+  exitDailyChallenge() {
+    this.isDailyChallengeMode = false;
+    this.ui.hideDailyChallengeResult();
+    this.ui.showStartScreen();
   }
 }

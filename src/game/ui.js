@@ -1,4 +1,5 @@
 import { ORE_PRICES, ORE_NAMES, UPGRADE_DEFS, TILE_SIZE, SURFACE_Y, DEPTH_BONUS_MULTIPLIER } from './constants.js';
+import { dailyChallenge, DAILY_CHALLENGE_BADGES } from './dailyChallenge.js';
 
 export class UIManager {
   constructor(game) {
@@ -6,6 +7,7 @@ export class UIManager {
     this.warningTimeout = null;
     this.setupShopButtons();
     this.setupTeleportButton();
+    this.setupDailyChallengeButtons();
   }
 
   setupTeleportButton() {
@@ -298,5 +300,230 @@ export class UIManager {
 
   hideHUD() {
     document.getElementById('hud').classList.add('hidden');
+  }
+
+  setupDailyChallengeButtons() {
+    document.getElementById('dailyRetryBtn').addEventListener('click', () => {
+      this.game.restartDailyChallenge();
+    });
+
+    document.getElementById('dailyBackBtn').addEventListener('click', () => {
+      this.game.exitDailyChallenge();
+    });
+
+    document.getElementById('closeLeaderboardBtn').addEventListener('click', () => {
+      this.hideLeaderboard();
+    });
+
+    document.getElementById('closeBadgesBtn').addEventListener('click', () => {
+      this.hideBadges();
+    });
+
+    document.getElementById('changeNameBtn').addEventListener('click', () => {
+      this.showNameInput();
+    });
+
+    document.getElementById('saveNameBtn').addEventListener('click', () => {
+      const name = document.getElementById('playerNameInput').value.trim();
+      if (name) {
+        dailyChallenge.setPlayerName(name);
+        document.getElementById('currentPlayerName').textContent = name;
+      }
+      this.hideNameInput();
+    });
+
+    document.getElementById('cancelNameBtn').addEventListener('click', () => {
+      this.hideNameInput();
+    });
+  }
+
+  showDailyChallengeInfo() {
+    const challenge = dailyChallenge.getChallenge();
+    document.getElementById('dailyChallengeDesc').textContent = challenge.description;
+    document.getElementById('dailyChallengeInfo').classList.remove('hidden');
+  }
+
+  hideDailyChallengeInfo() {
+    document.getElementById('dailyChallengeInfo').classList.add('hidden');
+  }
+
+  updateDailyChallengeHUD(timeElapsed, progress) {
+    const challenge = dailyChallenge.getChallenge();
+    const timeRemaining = Math.max(0, challenge.timeLimit - timeElapsed);
+    
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = Math.floor(timeRemaining % 60);
+    document.getElementById('dailyTimer').textContent = 
+      `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    
+    const progressPercent = Math.floor(progress * 100);
+    document.getElementById('dailyProgress').textContent = `${progressPercent}%`;
+    document.getElementById('dailyProgressBar').style.width = `${progressPercent}%`;
+
+    if (timeRemaining < 30) {
+      document.getElementById('dailyTimer').classList.add('text-red-500', 'animate-pulse');
+    } else {
+      document.getElementById('dailyTimer').classList.remove('text-red-500', 'animate-pulse');
+    }
+  }
+
+  showDailyChallengeResult(result) {
+    const screen = document.getElementById('dailyChallengeResult');
+    
+    const titleEl = document.getElementById('dailyResultTitle');
+    if (result.completed) {
+      titleEl.textContent = '🎉 挑战成功！';
+      titleEl.className = 'text-4xl text-center font-game mb-6 text-yellow-400';
+    } else {
+      titleEl.textContent = '⏱️ 挑战结束';
+      titleEl.className = 'text-4xl text-center font-game mb-6 text-orange-400';
+    }
+
+    document.getElementById('dailyResultCompleted').textContent = result.completed ? '✅ 已完成' : '❌ 未完成';
+    document.getElementById('dailyResultCompleted').className = `font-bold ${result.completed ? 'text-green-400' : 'text-red-400'}`;
+    document.getElementById('dailyResultProgress').textContent = `${Math.floor(result.progress * 100)}%`;
+    
+    const minutes = Math.floor(result.timeTaken / 60);
+    const seconds = Math.floor(result.timeTaken % 60);
+    document.getElementById('dailyResultTime').textContent = `${minutes}分${seconds}秒`;
+    
+    document.getElementById('dailyResultScore').textContent = result.score;
+    
+    if (result.rank > 0) {
+      document.getElementById('dailyResultRank').textContent = `第 ${result.rank} 名 / 共 ${result.totalPlayers} 人`;
+    } else {
+      document.getElementById('dailyResultRank').textContent = '未上榜';
+    }
+
+    const badgeEl = document.getElementById('dailyResultBadge');
+    if (result.badge && result.completed) {
+      badgeEl.classList.remove('hidden');
+      document.getElementById('dailyBadgeIcon').textContent = this.getBadgeIcon(result.badge.key);
+      document.getElementById('dailyBadgeName').textContent = `${result.badge.name}徽章`;
+      document.getElementById('dailyBadgeName').style.color = result.badge.color;
+    } else {
+      badgeEl.classList.add('hidden');
+    }
+
+    const rewardsEl = document.getElementById('dailyRewards');
+    if (result.rewards.gold > 0) {
+      rewardsEl.innerHTML = `💰 金币 +${result.rewards.gold}`;
+    } else {
+      rewardsEl.innerHTML = '完成挑战以获得奖励';
+    }
+
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+  }
+
+  hideDailyChallengeResult() {
+    const screen = document.getElementById('dailyChallengeResult');
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+
+  showStartScreen() {
+    document.getElementById('startScreen').classList.remove('hidden');
+    this.hideHUD();
+    this.hideDailyChallengeInfo();
+    this.hideDailyChallengeResult();
+    this.hideGameOver();
+  }
+
+  showLeaderboard() {
+    const challenge = dailyChallenge.getChallenge();
+    const leaderboard = dailyChallenge.getLeaderboard();
+    
+    document.getElementById('leaderboardDate').textContent = `日期: ${challenge.dateKey}`;
+    
+    const listEl = document.getElementById('leaderboardList');
+    if (leaderboard.length === 0) {
+      listEl.innerHTML = '<div class="text-center text-gray-500 py-4">暂无记录，快来挑战吧！</div>';
+    } else {
+      listEl.innerHTML = leaderboard.map((entry, index) => `
+        <div class="flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-yellow-900/50 border border-yellow-600' : 
+          index === 1 ? 'bg-gray-700/50 border border-gray-500' : 
+          index === 2 ? 'bg-amber-900/50 border border-amber-700' : 'bg-black/30 border border-gray-700'}">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}</span>
+            <div>
+              <div class="font-bold text-white">${entry.playerName}</div>
+              <div class="text-xs text-gray-400">${entry.completed ? '✅ 已完成' : '⏱️ 未完成'} · ${Math.floor(entry.progress * 100)}%</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold text-yellow-400">${entry.score}分</div>
+            <div class="text-xs text-gray-400">深度${entry.maxDepth}m · 击杀${entry.enemiesKilled}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('currentPlayerName').textContent = dailyChallenge.getPlayerName();
+    
+    const screen = document.getElementById('leaderboardPanel');
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+  }
+
+  hideLeaderboard() {
+    const screen = document.getElementById('leaderboardPanel');
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+
+  showBadges() {
+    const badges = dailyChallenge.getBadges();
+    const listEl = document.getElementById('badgesList');
+    const noBadgesMsg = document.getElementById('noBadgesMsg');
+
+    if (badges.length === 0) {
+      listEl.innerHTML = '';
+      noBadgesMsg.classList.remove('hidden');
+    } else {
+      noBadgesMsg.classList.add('hidden');
+      listEl.innerHTML = badges.map(badge => `
+        <div class="bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg p-4 border-2 text-center" style="border-color: ${badge.color}">
+          <div class="text-5xl mb-2">${this.getBadgeIcon(badge.key)}</div>
+          <div class="font-bold text-lg mb-1" style="color: ${badge.color}">${badge.name}徽章</div>
+          <div class="text-xs text-gray-400">${badge.dateKey}</div>
+          <div class="text-xs text-gray-500 mt-1">深度${badge.stats.maxDepth}m · 击杀${badge.stats.enemiesKilled}</div>
+        </div>
+      `).join('');
+    }
+
+    const screen = document.getElementById('badgesPanel');
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+  }
+
+  hideBadges() {
+    const screen = document.getElementById('badgesPanel');
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+
+  showNameInput() {
+    document.getElementById('playerNameInput').value = dailyChallenge.getPlayerName();
+    const screen = document.getElementById('nameInputModal');
+    screen.classList.remove('hidden');
+    screen.classList.add('flex');
+    document.getElementById('playerNameInput').focus();
+  }
+
+  hideNameInput() {
+    const screen = document.getElementById('nameInputModal');
+    screen.classList.add('hidden');
+    screen.classList.remove('flex');
+  }
+
+  getBadgeIcon(key) {
+    const icons = {
+      BRONZE: '🥉',
+      SILVER: '🥈',
+      GOLD: '🥇',
+      PLATINUM: '💎'
+    };
+    return icons[key] || '🏅';
   }
 }
